@@ -20,15 +20,19 @@ async def get_workspaces(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    workspaces = db.query(Workspace).filter(Workspace.owner_id == current_user.id).all()
+    print(f"🏢 워크스페이스 조회 요청: 사용자 ID {current_user.id}")
+    
+    workspaces = db.query(Workspace).filter(Workspace.user_id == current_user.id).all()
+    
+    print(f"📊 찾은 워크스페이스 수: {len(workspaces)}")
     
     # 응답 형식을 OpenAPI에 맞게 변환
     result = []
     for workspace in workspaces:
         result.append({
             "id": str(workspace.id),
-            "user_id": workspace.owner_id,
-            "title": workspace.name,
+            "user_id": workspace.user_id,
+            "title": workspace.title,
             "description": workspace.description,
             "university_name": workspace.university_name,
             "created_at": workspace.created_at,
@@ -39,22 +43,27 @@ async def get_workspaces(
 
 @router.get("/{workspace_id}", response_model=WorkspaceSchema)
 async def get_workspace(
-    workspace_id: int,
+    workspace_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
+    print(f"🔍 워크스페이스 상세 조회: {workspace_id}")
+    
     workspace = db.query(Workspace).filter(
         Workspace.id == workspace_id,
-        Workspace.owner_id == current_user.id
+        Workspace.user_id == current_user.id
     ).first()
     
     if not workspace:
+        print(f"❌ 워크스페이스를 찾을 수 없음: {workspace_id}")
         raise HTTPException(status_code=404, detail="Workspace not found")
+    
+    print(f"✅ 워크스페이스 찾음: {workspace.title}")
     
     return {
         "id": str(workspace.id),
-        "user_id": workspace.owner_id,
-        "title": workspace.name,
+        "user_id": workspace.user_id,
+        "title": workspace.title,
         "description": workspace.description,
         "university_name": workspace.university_name,
         "created_at": workspace.created_at,
@@ -68,10 +77,10 @@ async def create_workspace(
     current_user: User = Depends(get_current_active_user)
 ):
     db_workspace = Workspace(
-        name=workspace.title,  # title -> name으로 매핑
+        title=workspace.title,  # title -> name으로 매핑
         description=workspace.description,
         university_name=workspace.university_name,
-        owner_id=current_user.id
+        user_id=current_user.id
     )
     db.add(db_workspace)
     db.commit()
@@ -79,8 +88,8 @@ async def create_workspace(
     
     return {
         "id": str(db_workspace.id),
-        "user_id": db_workspace.owner_id,
-        "title": db_workspace.name,
+        "user_id": db_workspace.user_id,
+        "title": db_workspace.title,
         "description": db_workspace.description,
         "university_name": db_workspace.university_name,
         "created_at": db_workspace.created_at,
@@ -89,14 +98,14 @@ async def create_workspace(
 
 @router.put("/{workspace_id}", response_model=StandardResponse)
 async def update_workspace(
-    workspace_id: int,
+    workspace_id: str,
     workspace_update: WorkspaceUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
     workspace = db.query(Workspace).filter(
         Workspace.id == workspace_id,
-        Workspace.owner_id == current_user.id
+        Workspace.user_id == current_user.id
     ).first()
     
     if not workspace:
@@ -104,7 +113,7 @@ async def update_workspace(
     
     # 업데이트 데이터 처리
     if workspace_update.title is not None:
-        workspace.name = workspace_update.title
+        workspace.title = workspace_update.title
     if workspace_update.description is not None:
         workspace.description = workspace_update.description
     if workspace_update.university_name is not None:
@@ -120,13 +129,13 @@ async def update_workspace(
 
 @router.delete("/{workspace_id}", response_model=StandardResponse)
 async def delete_workspace(
-    workspace_id: int,
+    workspace_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
     workspace = db.query(Workspace).filter(
         Workspace.id == workspace_id,
-        Workspace.owner_id == current_user.id
+        Workspace.user_id == current_user.id
     ).first()
     
     if not workspace:
@@ -143,14 +152,14 @@ async def delete_workspace(
 
 @router.get("/{workspace_id}/categories", response_model=List[CategorySchema])
 async def get_categories(
-    workspace_id: int,
+    workspace_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
     # 워크스페이스 권한 확인
     workspace = db.query(Workspace).filter(
         Workspace.id == workspace_id,
-        Workspace.owner_id == current_user.id
+        Workspace.user_id == current_user.id
     ).first()
     
     if not workspace:
@@ -173,7 +182,7 @@ async def get_categories(
 
 @router.post("/{workspace_id}/categories", response_model=CategorySchema)
 async def create_category(
-    workspace_id: int,
+    workspace_id: str,
     category: CategoryCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
@@ -181,7 +190,7 @@ async def create_category(
     # 워크스페이스 권한 확인
     workspace = db.query(Workspace).filter(
         Workspace.id == workspace_id,
-        Workspace.owner_id == current_user.id
+        Workspace.user_id == current_user.id
     ).first()
     
     if not workspace:

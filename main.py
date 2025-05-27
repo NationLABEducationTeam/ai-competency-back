@@ -5,13 +5,14 @@ import uvicorn
 
 app = FastAPI(title="Survey Backend API", version="1.0.0")
 
-# CORS 설정
+# CORS 설정 - 모든 origin 허용
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 프로덕션에서는 특정 도메인으로 제한
+    allow_origins=["*"],  # 모든 도메인 허용
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],  # 모든 HTTP 메서드 허용
+    allow_headers=["*"],  # 모든 헤더 허용
+    expose_headers=["*"],  # 모든 헤더 노출
 )
 
 # 라우터 등록
