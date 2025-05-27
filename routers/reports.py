@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 import boto3
 import json
 import os
@@ -29,7 +29,7 @@ class Report(BaseModel):
     survey_id: int
     survey_title: str
     created_at: datetime
-    report_url: str = None
+    report_url: Optional[str] = None
 
 class SaveReportRequest(BaseModel):
     survey_id: int
@@ -61,7 +61,8 @@ async def get_all_reports(
                 "workspace_name": survey.workspace.name,
                 "survey_id": survey.id,
                 "survey_title": survey.title,
-                "created_at": survey.created_at
+                "created_at": survey.created_at,
+                "report_url": survey.excel_file_url  # 기존 파일 URL 사용
             })
     
     return reports
@@ -98,10 +99,97 @@ async def get_workspace_reports(
                 "workspace_name": workspace.name,
                 "survey_id": survey.id,
                 "survey_title": survey.title,
-                "created_at": survey.created_at
+                "created_at": survey.created_at,
+                "report_url": survey.excel_file_url  # 기존 파일 URL 사용
             })
     
     return reports
+
+@router.get("/students")
+async def get_student_list(
+    workspace_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """학생 목록 조회 (워크스페이스별 필터링 가능)"""
+    query = db.query(Response).join(Survey).join(Workspace).filter(
+        Workspace.owner_id == current_user.id
+    )
+    
+    if workspace_id:
+        query = query.filter(Survey.workspace_id == workspace_id)
+    
+    # 이메일로 그룹화하여 학생 목록 생성
+    students_dict = {}
+    responses = query.all()
+    
+    for response in responses:
+        email = response.respondent_email
+        if email not in students_dict:
+            students_dict[email] = {
+                "email": email,
+                "name": response.respondent_name,
+                "response_count": 0,
+                "last_response_date": response.created_at
+            }
+        students_dict[email]["response_count"] += 1
+        if response.created_at > students_dict[email]["last_response_date"]:
+            students_dict[email]["last_response_date"] = response.created_at
+    
+    student_list = list(students_dict.values())
+    return f"Found {len(student_list)} students with {len(responses)} total responses"
+
+@router.get("/students/{student_email}/results")
+async def get_student_results(
+    student_email: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """특정 학생의 모든 설문 결과 조회"""
+    responses = db.query(Response).join(Survey).join(Workspace).filter(
+        Workspace.owner_id == current_user.id,
+        Response.respondent_email == student_email
+    ).all()
+    
+    if not responses:
+        raise HTTPException(status_code=404, detail="Student not found")
+    
+    results = []
+    total_avg_score = 0
+    completed_surveys = 0
+    
+    for response in responses:
+        # 답변 정보 조회
+        answers = db.query(Answer).filter(Answer.response_id == response.id).all()
+        
+        # 점수 계산
+        total_score = 0
+        score_count = 0
+        for answer in answers:
+            if answer.answer_value is not None:
+                total_score += answer.answer_value
+                score_count += 1
+        
+        avg_score = total_score / score_count if score_count > 0 else 0
+        
+        if response.completed:
+            total_avg_score += avg_score
+            completed_surveys += 1
+        
+        results.append({
+            "response_id": response.id,
+            "survey_id": response.survey_id,
+            "survey_title": response.survey.title,
+            "workspace_name": response.survey.workspace.name,
+            "completed": response.completed,
+            "created_at": response.created_at,
+            "average_score": round(avg_score, 2),
+            "total_questions": len(answers)
+        })
+    
+    overall_avg = total_avg_score / completed_surveys if completed_surveys > 0 else 0
+    
+    return f"Student {student_email} ({responses[0].respondent_name if responses else 'Unknown'}): {len(responses)} responses, {completed_surveys} completed, Overall Average: {overall_avg:.2f}"
 
 @router.post("/save-to-s3")
 async def save_report_to_s3(
@@ -135,10 +223,7 @@ async def save_report_to_s3(
         
         report_url = f"https://{BUCKET_NAME}.s3.amazonaws.com/{file_key}"
         
-        return {
-            "message": "Report saved successfully",
-            "report_url": report_url
-        }
+        return f"Report saved successfully to S3: {report_url}"
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

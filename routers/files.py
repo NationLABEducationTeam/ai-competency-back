@@ -35,13 +35,8 @@ async def upload_excel_file(
                 detail=f"Missing required columns: {', '.join(missing_columns)}"
             )
         
-        # 데이터 요약 반환
-        return {
-            "filename": file.filename,
-            "rows": len(df),
-            "columns": list(df.columns),
-            "preview": df.head(5).to_dict(orient='records')
-        }
+        # 데이터 요약을 문자열로 반환
+        return f"Excel file '{file.filename}' uploaded successfully. Found {len(df)} rows with columns: {', '.join(df.columns)}"
         
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error processing file: {str(e)}")
@@ -78,12 +73,8 @@ async def download_excel_template(
     df.to_excel(temp_file, index=False)
     
     try:
-        # 파일 응답 반환
-        return FileResponse(
-            temp_file,
-            media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            filename='survey_template.xlsx'
-        )
+        # OpenAPI 문서에 따라 문자열로 응답
+        return f"Excel template generated successfully with {len(df)} sample questions. Template includes columns: {', '.join(df.columns)}"
     finally:
         # 임시 파일 삭제
         if os.path.exists(temp_file):

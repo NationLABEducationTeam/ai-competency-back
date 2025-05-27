@@ -9,6 +9,7 @@ class Workspace(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)
     description = Column(Text)
+    university_name = Column(String(255))
     owner_id = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -23,6 +24,7 @@ class Category(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)
+    description = Column(Text)
     workspace_id = Column(Integer, ForeignKey("workspaces.id"))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     

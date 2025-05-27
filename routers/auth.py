@@ -43,7 +43,16 @@ async def register(user: UserCreate, db: Session = Depends(get_db)):
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
-    return db_user
+    
+    # OpenAPI 문서에 맞는 응답 형식
+    return {
+        "email": db_user.email,
+        "username": db_user.username,
+        "id": db_user.id,
+        "is_active": db_user.is_active,
+        "is_superuser": db_user.is_superuser,
+        "created_at": db_user.created_at
+    }
 
 @router.post("/login", response_model=Token)
 async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
@@ -64,9 +73,17 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
 
 @router.post("/logout")
 async def logout(current_user: User = Depends(get_current_active_user)):
-    # 클라이언트 측에서 토큰을 삭제하도록 안내
-    return {"message": "Successfully logged out"}
+    # OpenAPI 문서에 따라 단순 문자열 반환
+    return "Successfully logged out"
 
 @router.get("/me", response_model=UserSchema)
 async def read_users_me(current_user: User = Depends(get_current_active_user)):
-    return current_user 
+    # OpenAPI 문서에 맞는 응답 형식
+    return {
+        "email": current_user.email,
+        "username": current_user.username,
+        "id": current_user.id,
+        "is_active": current_user.is_active,
+        "is_superuser": current_user.is_superuser,
+        "created_at": current_user.created_at
+    } 

@@ -4,35 +4,42 @@ from datetime import datetime
 
 class CategoryBase(BaseModel):
     name: str
+    description: Optional[str] = None
 
 class CategoryCreate(CategoryBase):
     pass
 
 class Category(CategoryBase):
-    id: int
-    workspace_id: int
+    id: str
+    workspace_id: str
     created_at: datetime
     
     class Config:
         from_attributes = True
 
 class WorkspaceBase(BaseModel):
-    name: str
+    title: str
     description: Optional[str] = None
+    university_name: Optional[str] = None
 
 class WorkspaceCreate(WorkspaceBase):
     pass
 
 class WorkspaceUpdate(BaseModel):
-    name: Optional[str] = None
+    title: Optional[str] = None
     description: Optional[str] = None
+    university_name: Optional[str] = None
 
 class Workspace(WorkspaceBase):
-    id: int
-    owner_id: int
+    id: str
+    user_id: int
     created_at: datetime
     updated_at: Optional[datetime] = None
-    categories: List[Category] = []
     
     class Config:
-        from_attributes = True 
+        from_attributes = True
+
+class StandardResponse(BaseModel):
+    success: bool
+    message: str
+    data: dict = {} 

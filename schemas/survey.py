@@ -46,6 +46,9 @@ class Survey(SurveyBase):
 class SurveyStatusUpdate(BaseModel):
     status: str  # draft, active, completed
 
+class PresignedUrlRequest(BaseModel):
+    filename: str
+
 class PresignedUrlResponse(BaseModel):
     upload_url: str
     file_key: str
