@@ -5,14 +5,24 @@ import uvicorn
 
 app = FastAPI(title="Survey Backend API", version="1.0.0")
 
-# CORS 설정 - 모든 origin 허용
+# CORS 설정
+origins = [
+    "http://localhost:3000",      # React 개발 서버
+    "http://localhost:5173",      # Vite 개발 서버
+    "http://localhost",
+    "http://3.35.230.242",
+    "http://3.35.230.242:3000",
+    "http://3.35.230.242:8080",
+    "http://3.35.230.242:5173"
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 모든 도메인 허용
+    allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],  # 모든 HTTP 메서드 허용
-    allow_headers=["*"],  # 모든 헤더 허용
-    expose_headers=["*"],  # 모든 헤더 노출
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"]
 )
 
 # 라우터 등록

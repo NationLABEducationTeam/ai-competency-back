@@ -26,13 +26,13 @@ class Report(BaseModel):
     title: str
     workspace_id: int
     workspace_name: str
-    survey_id: int
+    survey_id: str
     survey_title: str
     created_at: datetime
     report_url: Optional[str] = None
 
 class SaveReportRequest(BaseModel):
-    survey_id: int
+    survey_id: str
     report_data: dict
 
 @router.get("/", response_model=List[Report])

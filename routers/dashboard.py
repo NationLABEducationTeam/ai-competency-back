@@ -1,10 +1,13 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_
+from sqlalchemy import func, and_, desc
 from datetime import datetime, timedelta, date
-from typing import List, Dict
+from typing import List, Dict, Optional
 from database.connection import get_db
-from models import User, Workspace, Survey, Response, Answer, Question
+from models import (
+    User, Workspace, Survey, Response, Answer, Question,
+    Category, SimpleAnalytics
+)
 from utils.auth import get_current_active_user
 
 router = APIRouter()
@@ -14,197 +17,192 @@ async def get_dashboard_overview(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    # 사용자의 워크스페이스 수
-    workspace_count = db.query(Workspace).filter(
-        Workspace.owner_id == current_user.id
-    ).count()
-    
-    # 전체 설문 수
-    survey_count = db.query(Survey).join(Workspace).filter(
-        Workspace.owner_id == current_user.id
-    ).count()
-    
-    # 활성 설문 수
-    active_survey_count = db.query(Survey).join(Workspace).filter(
-        Workspace.owner_id == current_user.id,
-        Survey.status == "active"
-    ).count()
-    
-    # 전체 응답 수
-    response_count = db.query(Response).join(Survey).join(Workspace).filter(
-        Workspace.owner_id == current_user.id
-    ).count()
-    
-    return {
-        "workspace_count": workspace_count,
-        "survey_count": survey_count,
-        "active_survey_count": active_survey_count,
-        "response_count": response_count
-    }
+    """대시보드 개요"""
+    try:
+        # 워크스페이스 정보 조회
+        workspace = db.query(Workspace).filter(
+            Workspace.user_id == current_user.id
+        ).first()
+        
+        if not workspace:
+            raise HTTPException(status_code=404, detail="Workspace not found")
+        
+        # 최근 30일 응답 통계
+        thirty_days_ago = datetime.now() - timedelta(days=30)
+        recent_analytics = db.query(SimpleAnalytics).join(Survey).filter(
+            Survey.workspace_id == workspace.id,
+            SimpleAnalytics.created_at >= thirty_days_ago
+        ).all()
+        
+        # 응답자 수
+        total_responses = len(recent_analytics)
+        
+        # 평균 점수
+        if total_responses > 0:
+            avg_score = sum(a.percentage for a in recent_analytics) / total_responses
+        else:
+            avg_score = 0
+        
+        # 최근 응답 목록 (상위 5개)
+        recent_responses = db.query(SimpleAnalytics).join(Survey).filter(
+            Survey.workspace_id == workspace.id
+        ).order_by(
+            desc(SimpleAnalytics.created_at)
+        ).limit(5).all()
+        
+        recent_list = []
+        for analytics in recent_responses:
+            recent_list.append({
+                "respondent_name": analytics.respondent_name,
+                "total_score": analytics.total_score,
+                "percentage": analytics.percentage,
+                "created_at": analytics.created_at
+            })
+        
+        return {
+            "total_responses": total_responses,
+            "average_score": round(avg_score, 1),
+            "recent_responses": recent_list
+        }
+        
+    except Exception as e:
+        print(f"대시보드 개요 조회 중 오류: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to fetch dashboard overview"
+        )
 
 @router.get("/stats")
 async def get_dashboard_stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    # 완료된 응답 수
-    completed_responses = db.query(Response).join(Survey).join(Workspace).filter(
-        Workspace.owner_id == current_user.id,
-        Response.completed == True
-    ).count()
-    
-    # 평균 완료율
-    total_responses = db.query(Response).join(Survey).join(Workspace).filter(
-        Workspace.owner_id == current_user.id
-    ).count()
-    
-    completion_rate = (completed_responses / total_responses * 100) if total_responses > 0 else 0
-    
-    # 최근 7일 응답 수
-    seven_days_ago = datetime.now() - timedelta(days=7)
-    recent_responses = db.query(Response).join(Survey).join(Workspace).filter(
-        Workspace.owner_id == current_user.id,
-        Response.created_at >= seven_days_ago
-    ).count()
-    
-    return {
-        "completed_responses": completed_responses,
-        "completion_rate": round(completion_rate, 2),
-        "recent_responses": recent_responses
-    }
+    try:
+        # 워크스페이스 정보 조회
+        workspace = db.query(Workspace).filter(
+            Workspace.user_id == current_user.id
+        ).first()
+        
+        if not workspace:
+            raise HTTPException(status_code=404, detail="Workspace not found")
 
-@router.get("/analytics/daily")
-async def get_daily_response_trend(
+        # 통계 데이터 조회
+        analytics = db.query(SimpleAnalytics).join(Survey).filter(
+            Survey.workspace_id == workspace.id
+        ).all()
+
+        if not analytics:
+            return {
+                "total_responses": 0,
+                "average_score": 0,
+                "score_distribution": {},
+                "trend_data": []
+            }
+
+        # 총 응답 수
+        total_responses = len(analytics)
+
+        # 평균 점수
+        average_score = sum(a.percentage for a in analytics) / total_responses
+
+        # 점수 분포 (10점 단위로 버킷팅)
+        score_distribution = {}
+        for a in analytics:
+            bucket = int(a.percentage // 10) * 10
+            score_distribution[str(bucket)] = score_distribution.get(str(bucket), 0) + 1
+
+        # 최근 30일 추세
+        thirty_days_ago = datetime.now() - timedelta(days=30)
+        trend_data = []
+        
+        for i in range(30):
+            date = thirty_days_ago + timedelta(days=i)
+            day_analytics = [a for a in analytics if a.created_at.date() == date.date()]
+            
+            if day_analytics:
+                avg_score = sum(a.percentage for a in day_analytics) / len(day_analytics)
+            else:
+                avg_score = 0
+                
+            trend_data.append({
+                "date": date.strftime("%Y-%m-%d"),
+                "average_score": round(avg_score, 1),
+                "response_count": len(day_analytics)
+            })
+
+        return {
+            "total_responses": total_responses,
+            "average_score": round(average_score, 1),
+            "score_distribution": score_distribution,
+            "trend_data": trend_data
+        }
+
+    except Exception as e:
+        print(f"대시보드 통계 조회 중 오류: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to fetch dashboard statistics"
+        )
+
+@router.get("/trend")
+async def get_response_trend(
     days: int = 30,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    start_date = date.today() - timedelta(days=days)
-    
-    # 일별 응답 수 집계
-    daily_responses = db.query(
-        func.date(Response.created_at).label('date'),
-        func.count(Response.id).label('count')
-    ).join(Survey).join(Workspace).filter(
-        Workspace.owner_id == current_user.id,
-        Response.created_at >= start_date
-    ).group_by(func.date(Response.created_at)).all()
-    
-    return [
-        {"date": str(item.date), "count": item.count}
-        for item in daily_responses
-    ]
-
-@router.get("/analytics/competencies")
-async def get_competency_scores(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    # 역량별 평균 점수 (예시)
-    # 실제로는 질문 카테고리나 태그를 기반으로 계산
-    return [
-        {"competency": "리더십", "average_score": 4.2},
-        {"competency": "커뮤니케이션", "average_score": 3.8},
-        {"competency": "문제해결", "average_score": 4.0},
-        {"competency": "팀워크", "average_score": 4.5},
-        {"competency": "창의성", "average_score": 3.6}
-    ]
-
-@router.get("/analytics/demographics")
-async def get_demographic_distribution(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    # 교육수준 분포 (예시)
-    return [
-        {"education_level": "고등학교", "count": 120},
-        {"education_level": "대학교", "count": 280},
-        {"education_level": "대학원", "count": 85}
-    ]
-
-@router.get("/realtime/today")
-async def get_today_realtime_stats(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    today_start = datetime.combine(date.today(), datetime.min.time())
-    
-    # 오늘의 응답 수
-    today_responses = db.query(Response).join(Survey).join(Workspace).filter(
-        Workspace.owner_id == current_user.id,
-        Response.created_at >= today_start
-    ).count()
-    
-    # 오늘의 완료 수
-    today_completed = db.query(Response).join(Survey).join(Workspace).filter(
-        Workspace.owner_id == current_user.id,
-        Response.created_at >= today_start,
-        Response.completed == True
-    ).count()
-    
-    # 현재 진행 중인 응답 수
-    in_progress = db.query(Response).join(Survey).join(Workspace).filter(
-        Workspace.owner_id == current_user.id,
-        Response.completed == False
-    ).count()
-    
-    return {
-        "today_responses": today_responses,
-        "today_completed": today_completed,
-        "in_progress": in_progress
-    }
-
-@router.get("/analytics/completion")
-async def get_workspace_completion_rates(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    # 워크스페이스별 완료율
-    workspaces = db.query(Workspace).filter(
-        Workspace.owner_id == current_user.id
-    ).all()
-    
-    completion_rates = []
-    for workspace in workspaces:
-        total = db.query(Response).join(Survey).filter(
-            Survey.workspace_id == workspace.id
-        ).count()
+    try:
+        # 워크스페이스 정보 조회
+        workspace = db.query(Workspace).filter(
+            Workspace.user_id == current_user.id
+        ).first()
         
-        completed = db.query(Response).join(Survey).filter(
+        if not workspace:
+            raise HTTPException(status_code=404, detail="Workspace not found")
+
+        # 기간별 응답 추세
+        start_date = datetime.now() - timedelta(days=days)
+        analytics = db.query(SimpleAnalytics).join(Survey).filter(
             Survey.workspace_id == workspace.id,
-            Response.completed == True
-        ).count()
-        
-        rate = (completed / total * 100) if total > 0 else 0
-        
-        completion_rates.append({
-            "workspace_name": workspace.name,
-            "completion_rate": round(rate, 2),
-            "total_responses": total,
-            "completed_responses": completed
-        })
-    
-    return completion_rates
+            SimpleAnalytics.created_at >= start_date
+        ).all()
 
-@router.get("/responses/recent")
-async def get_recent_responses(
-    limit: int = 10,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    # 최근 응답자 목록
-    recent_responses = db.query(Response).join(Survey).join(Workspace).filter(
-        Workspace.owner_id == current_user.id
-    ).order_by(Response.created_at.desc()).limit(limit).all()
-    
-    return [
-        {
-            "id": response.id,
-            "respondent_name": response.respondent_name,
-            "respondent_email": response.respondent_email,
-            "survey_title": response.survey.title,
-            "completed": response.completed,
-            "created_at": response.created_at.isoformat()
-        }
-        for response in recent_responses
-    ] 
+        # 일자별 데이터 집계
+        daily_data = {}
+        for analytic in analytics:
+            date_key = analytic.created_at.strftime("%Y-%m-%d")
+            if date_key not in daily_data:
+                daily_data[date_key] = {
+                    "response_count": 0,
+                    "total_score": 0
+                }
+            daily_data[date_key]["response_count"] += 1
+            daily_data[date_key]["total_score"] += analytic.percentage
+
+        # 결과 포맷팅
+        trend_data = []
+        current_date = start_date
+        while current_date <= datetime.now():
+            date_key = current_date.strftime("%Y-%m-%d")
+            if date_key in daily_data:
+                avg_score = daily_data[date_key]["total_score"] / daily_data[date_key]["response_count"]
+                trend_data.append({
+                    "date": date_key,
+                    "response_count": daily_data[date_key]["response_count"],
+                    "average_score": round(avg_score, 1)
+                })
+            else:
+                trend_data.append({
+                    "date": date_key,
+                    "response_count": 0,
+                    "average_score": 0
+                })
+            current_date += timedelta(days=1)
+
+        return trend_data
+
+    except Exception as e:
+        print(f"응답 추세 조회 중 오류: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to fetch response trend"
+        ) 

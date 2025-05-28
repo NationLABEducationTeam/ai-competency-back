@@ -38,7 +38,7 @@ class ResponseDetail(BaseModel):
 
 @router.get("/{survey_id}/info", response_model=SurveyInfo)
 async def get_survey_info(
-    survey_id: int,
+    survey_id: str,
     db: Session = Depends(get_db)
 ):
     survey = db.query(Survey).filter(
@@ -69,7 +69,7 @@ async def get_survey_info(
 
 @router.post("/{survey_id}/start")
 async def start_assessment(
-    survey_id: int,
+    survey_id: str,
     request: StartAssessmentRequest,
     db: Session = Depends(get_db)
 ):
@@ -97,7 +97,7 @@ async def start_assessment(
 
 @router.post("/{survey_id}/submit")
 async def submit_assessment(
-    survey_id: int,
+    survey_id: str,
     request: SubmitAssessmentRequest,
     db: Session = Depends(get_db)
 ):
@@ -129,7 +129,7 @@ async def submit_assessment(
 
 @router.get("/{survey_id}/scores")
 async def get_assessment_scores(
-    survey_id: int,
+    survey_id: str,
     response_id: int = Query(...),
     db: Session = Depends(get_db)
 ):
@@ -161,7 +161,7 @@ async def get_assessment_scores(
 # 관리자용 엔드포인트
 @router.get("/{survey_id}/responses")
 async def get_survey_responses(
-    survey_id: int,
+    survey_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -193,7 +193,7 @@ async def get_survey_responses(
 
 @router.get("/{survey_id}/responses/{response_id}", response_model=ResponseDetail)
 async def get_response_detail(
-    survey_id: int,
+    survey_id: str,
     response_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
@@ -241,7 +241,7 @@ async def get_response_detail(
 
 @router.put("/{survey_id}/status")
 async def update_survey_status(
-    survey_id: int,
+    survey_id: str,
     status: str = Query(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
