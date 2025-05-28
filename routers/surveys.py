@@ -8,7 +8,8 @@ import os
 from datetime import datetime
 from database.connection import get_db
 from models import (
-    User, Survey, Workspace, Question, Response, Answer, SimpleAnalytics
+    User, Survey, Workspace, Question, Response, Answer, SimpleAnalytics,
+    SurveyCategoryMapping
 )
 from schemas.survey import (
     SurveyCreate,
@@ -137,6 +138,7 @@ async def delete_survey(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
+    # 설문 존재 여부 및 권한 확인
     survey = db.query(Survey).join(Workspace).filter(
         Survey.id == survey_id,
         Workspace.user_id == current_user.id
@@ -145,9 +147,20 @@ async def delete_survey(
     if not survey:
         raise HTTPException(status_code=404, detail="Survey not found")
     
-    db.delete(survey)
-    db.commit()
-    return "Survey deleted successfully"
+    try:
+        # 설문-카테고리 매핑 삭제
+        db.query(SurveyCategoryMapping).filter(
+            SurveyCategoryMapping.survey_id == survey_id
+        ).delete()
+        
+        # 설문 삭제
+        db.delete(survey)
+        db.commit()
+        
+        return {"success": True, "message": "Survey deleted successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to delete survey: {str(e)}")
 
 @router.post("/{survey_id}/upload")
 async def upload_excel(

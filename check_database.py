@@ -13,7 +13,7 @@ load_dotenv()
 HOST = "competency-db.cjik2cuykhtl.ap-northeast-2.rds.amazonaws.com"
 PORT = 3306
 USER = "admin"
-PASSWORD = "26yXkiBsEaCF1rMyoW6o"
+PASSWORD = "GZGjuzwObS6CHW8Us7fD"
 
 def connect_to_mysql():
     """MySQL 데이터베이스에 연결"""

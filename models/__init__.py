@@ -1,7 +1,7 @@
 from .user import User
 from .workspace import Workspace
 from .category import Category
-from .survey import Survey, Question, Response, Answer, SimpleAnalytics
+from .survey import Survey, Question, Response, Answer, SimpleAnalytics, SurveyCategoryMapping
 
 # 임시로 다른 모델들은 주석 처리
 # from .workspace import Workspace, Category  
@@ -15,5 +15,6 @@ __all__ = [
     "Question", 
     "Response", 
     "Answer",
-    "SimpleAnalytics"
+    "SimpleAnalytics",
+    "SurveyCategoryMapping"
 ] 

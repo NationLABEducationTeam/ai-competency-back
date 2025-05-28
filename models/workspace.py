@@ -18,4 +18,5 @@ class Workspace(Base):
     # 관계 설정
     surveys = relationship("Survey", back_populates="workspace")
     categories = relationship("Category", back_populates="workspace", cascade="all, delete-orphan")
+    responses = relationship("Response", back_populates="workspace")
 

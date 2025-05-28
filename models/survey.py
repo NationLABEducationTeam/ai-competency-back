@@ -20,7 +20,6 @@ class Survey(Base):
     updated_at = Column(DateTime, server_default=func.now())
 
     workspace = relationship("Workspace", back_populates="surveys")
-    questions = relationship("Question", back_populates="survey", cascade="all, delete-orphan")
     responses = relationship("Response", back_populates="survey", cascade="all, delete-orphan")
     simple_analytics = relationship("SimpleAnalytics", back_populates="survey", cascade="all, delete-orphan")
 
@@ -28,26 +27,32 @@ class Question(Base):
     __tablename__ = "questions"
     
     id = Column(String(36), primary_key=True, index=True)
-    survey_id = Column(String(36), ForeignKey("surveys.id"))
+    category_id = Column(String(36), ForeignKey("categories.id"), nullable=False)
     question_text = Column(Text, nullable=False)
-    question_type = Column(String(50))  # multiple_choice, text, rating
-    options = Column(JSON)  # 선택지 저장
-    order_idx = Column(Integer)
+    order_idx = Column(Integer, nullable=False)
     created_at = Column(DateTime, server_default=func.now())
+    question_type = Column(String(50))
+    options = Column(JSON)
 
-    survey = relationship("Survey", back_populates="questions")
+    category = relationship("Category", back_populates="questions")
 
 class Response(Base):
     __tablename__ = "responses"
     
     id = Column(String(36), primary_key=True, index=True)
+    workspace_id = Column(String(36), ForeignKey("workspace.id"), nullable=False)
     survey_id = Column(String(36), ForeignKey("surveys.id"))
-    respondent_name = Column(String(100))
-    respondent_email = Column(String(100))
+    respondent_name = Column(String(100), nullable=False)
+    respondent_email = Column(String(100), nullable=False)
+    respondent_age = Column(Integer)
+    respondent_organization = Column(String(255))
+    respondent_education = Column(String(50))
+    respondent_major = Column(String(255))
     completed = Column(Boolean, default=False)
     created_at = Column(DateTime, server_default=func.now())
 
     survey = relationship("Survey", back_populates="responses")
+    workspace = relationship("Workspace", back_populates="responses")
 
 class Answer(Base):
     __tablename__ = "response_details"

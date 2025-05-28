@@ -16,4 +16,5 @@ class Category(Base):
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
     # 관계 설정
-    workspace = relationship("Workspace", back_populates="categories") 
+    workspace = relationship("Workspace", back_populates="categories")
+    questions = relationship("Question", back_populates="category", cascade="all, delete-orphan") 

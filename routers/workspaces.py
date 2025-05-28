@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
+import uuid
 from database.connection import get_db
 from models import User, Workspace, Category
 from schemas.workspace import (
@@ -20,9 +21,9 @@ async def get_workspaces(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    print(f"🏢 워크스페이스 조회 요청: 사용자 ID {current_user.id}")
+    print(f"🏢 워크스페이스 조회 요청")
     
-    workspaces = db.query(Workspace).filter(Workspace.user_id == current_user.id).all()
+    workspaces = db.query(Workspace).all()
     
     print(f"📊 찾은 워크스페이스 수: {len(workspaces)}")
     
@@ -50,8 +51,7 @@ async def get_workspace(
     print(f"🔍 워크스페이스 상세 조회: {workspace_id}")
     
     workspace = db.query(Workspace).filter(
-        Workspace.id == workspace_id,
-        Workspace.user_id == current_user.id
+        Workspace.id == workspace_id
     ).first()
     
     if not workspace:
@@ -76,8 +76,10 @@ async def create_workspace(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
+    workspace_id = str(uuid.uuid4())
     db_workspace = Workspace(
-        title=workspace.title,  # title -> name으로 매핑
+        id=workspace_id,
+        title=workspace.title,
         description=workspace.description,
         university_name=workspace.university_name,
         user_id=current_user.id
@@ -156,10 +158,9 @@ async def get_categories(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    # 워크스페이스 권한 확인
+    # 워크스페이스 존재 확인
     workspace = db.query(Workspace).filter(
-        Workspace.id == workspace_id,
-        Workspace.user_id == current_user.id
+        Workspace.id == workspace_id
     ).first()
     
     if not workspace:
