@@ -59,10 +59,8 @@ async def get_all_surveys(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    # 사용자의 모든 워크스페이스에서 설문 조회
-    surveys = db.query(Survey).join(Workspace).filter(
-        Workspace.user_id == current_user.id
-    ).all()
+    # 모든 설문 조회
+    surveys = db.query(Survey).all()
     
     return [format_survey_response(survey) for survey in surveys]
 
@@ -72,10 +70,9 @@ async def get_surveys_by_workspace(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    # 워크스페이스 권한 확인
+    # 워크스페이스 존재 확인
     workspace = db.query(Workspace).filter(
-        Workspace.id == workspace_id,
-        Workspace.user_id == current_user.id
+        Workspace.id == workspace_id
     ).first()
     
     if not workspace:
@@ -91,9 +88,8 @@ async def get_survey(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    survey = db.query(Survey).join(Workspace).filter(
-        Survey.id == survey_id,
-        Workspace.user_id == current_user.id
+    survey = db.query(Survey).filter(
+        Survey.id == survey_id
     ).first()
     
     if not survey:

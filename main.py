@@ -3,7 +3,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from routers import auth, workspaces, surveys, assessment, dashboard, reports, files
 import uvicorn
 
-app = FastAPI(title="Survey Backend API", version="1.0.0")
+app = FastAPI(
+    title="Survey API",
+    description="설문조사 백엔드 API",
+    version="1.0.0"
+)
 
 # CORS 설정
 origins = [

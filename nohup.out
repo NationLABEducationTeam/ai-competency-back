@@ -1,0 +1,89 @@
+nohup: ignoring input
+INFO:     Will watch for changes in these directories: ['/home/ec2-user/survey-back']
+INFO:     Uvicorn running on http://0.0.0.0:8080 (Press CTRL+C to quit)
+INFO:     Started reloader process [126051] using WatchFiles
+INFO:     Started server process [126054]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+🏢 워크스페이스 조회 요청
+📊 찾은 워크스페이스 수: 6
+INFO:     222.107.124.161:57496 - "GET /api/v1/workspaces/ HTTP/1.1" 200 OK
+INFO:     222.107.124.161:57496 - "GET /api/v1/dashboard/stats HTTP/1.1" 200 OK
+INFO:     222.107.124.161:57498 - "GET /api/v1/dashboard/analytics/competencies HTTP/1.1" 404 Not Found
+INFO:     222.107.124.161:57499 - "GET /api/v1/dashboard/analytics/demographics HTTP/1.1" 200 OK
+INFO:     222.107.124.161:57497 - "GET /api/v1/dashboard/analytics/daily HTTP/1.1" 200 OK
+INFO:     222.107.124.161:57500 - "GET /api/v1/dashboard/analytics/completion HTTP/1.1" 200 OK
+INFO:     222.107.124.161:57501 - "GET /api/v1/dashboard/realtime/today HTTP/1.1" 200 OK
+INFO:     222.107.124.161:57501 - "POST /api/v1/auth/logout HTTP/1.1" 200 OK
+INFO:     222.107.124.161:57501 - "GET /health HTTP/1.1" 200 OK
+🔐 로그인 시도: edu@aination.kr
+✅ 사용자 찾음: edu@aination.kr, 저장된 비밀번호 길이: 64
+🔑 비밀번호 검증 결과: True
+✅ 로그인 성공: edu@aination.kr
+INFO:     222.107.124.161:57501 - "POST /api/v1/auth/login HTTP/1.1" 200 OK
+INFO:     222.107.124.161:57501 - "GET /api/v1/auth/me HTTP/1.1" 200 OK
+🏢 워크스페이스 조회 요청
+📊 찾은 워크스페이스 수: 6
+INFO:     222.107.124.161:57501 - "GET /api/v1/workspaces/ HTTP/1.1" 200 OK
+INFO:     222.107.124.161:57501 - "GET /api/v1/dashboard/stats HTTP/1.1" 200 OK
+INFO:     222.107.124.161:57528 - "GET /api/v1/dashboard/analytics/competencies HTTP/1.1" 404 Not Found
+INFO:     222.107.124.161:57524 - "GET /api/v1/dashboard/analytics/daily HTTP/1.1" 200 OK
+INFO:     222.107.124.161:57525 - "GET /api/v1/dashboard/realtime/today HTTP/1.1" 200 OK
+INFO:     222.107.124.161:57526 - "GET /api/v1/dashboard/analytics/demographics HTTP/1.1" 200 OK
+INFO:     222.107.124.161:57527 - "GET /api/v1/dashboard/analytics/completion HTTP/1.1" 200 OK
+🏢 워크스페이스 조회 요청
+📊 찾은 워크스페이스 수: 6
+INFO:     222.107.124.161:57527 - "GET /api/v1/workspaces/ HTTP/1.1" 200 OK
+INFO:     141.98.11.27:60200 - "GET / HTTP/1.1" 200 OK
+INFO:     106.101.194.223:5912 - "OPTIONS /health HTTP/1.1" 200 OK
+INFO:     106.101.194.223:5912 - "GET /health HTTP/1.1" 200 OK
+INFO:     106.101.194.223:52159 - "OPTIONS /health HTTP/1.1" 200 OK
+INFO:     106.101.194.223:52159 - "GET /health HTTP/1.1" 200 OK
+INFO:     106.101.194.223:52172 - "OPTIONS /api/v1/auth/login HTTP/1.1" 200 OK
+🔐 로그인 시도: edu@aination.kr
+✅ 사용자 찾음: edu@aination.kr, 저장된 비밀번호 길이: 64
+🔑 비밀번호 검증 결과: True
+✅ 로그인 성공: edu@aination.kr
+INFO:     106.101.194.223:52172 - "POST /api/v1/auth/login HTTP/1.1" 200 OK
+INFO:     106.101.194.223:52172 - "OPTIONS /api/v1/auth/me HTTP/1.1" 200 OK
+INFO:     106.101.194.223:52172 - "GET /api/v1/auth/me HTTP/1.1" 200 OK
+INFO:     106.101.194.223:52175 - "OPTIONS /api/v1/workspaces/ HTTP/1.1" 200 OK
+🏢 워크스페이스 조회 요청
+📊 찾은 워크스페이스 수: 6
+INFO:     106.101.194.223:52175 - "GET /api/v1/workspaces/ HTTP/1.1" 200 OK
+INFO:     106.101.194.223:52175 - "OPTIONS /api/v1/dashboard/stats HTTP/1.1" 200 OK
+INFO:     106.101.194.223:52179 - "OPTIONS /api/v1/dashboard/realtime/today HTTP/1.1" 200 OK
+INFO:     106.101.194.223:52180 - "OPTIONS /api/v1/dashboard/analytics/completion HTTP/1.1" 200 OK
+INFO:     106.101.194.223:52176 - "OPTIONS /api/v1/dashboard/analytics/daily HTTP/1.1" 200 OK
+INFO:     106.101.194.223:32578 - "OPTIONS /api/v1/dashboard/analytics/demographics HTTP/1.1" 200 OK
+INFO:     106.101.194.223:52177 - "OPTIONS /api/v1/dashboard/analytics/competencies HTTP/1.1" 200 OK
+INFO:     106.101.194.223:52175 - "GET /api/v1/dashboard/stats HTTP/1.1" 200 OK
+INFO:     106.101.194.223:52179 - "GET /api/v1/dashboard/realtime/today HTTP/1.1" 200 OK
+INFO:     106.101.194.223:52176 - "GET /api/v1/dashboard/analytics/daily HTTP/1.1" 200 OK
+INFO:     106.101.194.223:52177 - "GET /api/v1/dashboard/analytics/competencies HTTP/1.1" 404 Not Found
+INFO:     106.101.194.223:52180 - "GET /api/v1/dashboard/analytics/completion HTTP/1.1" 200 OK
+INFO:     106.101.194.223:32578 - "GET /api/v1/dashboard/analytics/demographics HTTP/1.1" 200 OK
+🏢 워크스페이스 조회 요청
+📊 찾은 워크스페이스 수: 6
+INFO:     106.101.194.223:52181 - "GET /api/v1/workspaces/ HTTP/1.1" 200 OK
+INFO:     106.101.194.223:52182 - "OPTIONS /api/v1/workspaces/158a25cb-3731-4394-aea3-73211e112302 HTTP/1.1" 200 OK
+🔍 워크스페이스 상세 조회: 158a25cb-3731-4394-aea3-73211e112302
+✅ 워크스페이스 찾음: 와인스쿨
+INFO:     106.101.194.223:52182 - "GET /api/v1/workspaces/158a25cb-3731-4394-aea3-73211e112302 HTTP/1.1" 200 OK
+INFO:     106.101.194.223:52182 - "OPTIONS /api/v1/surveys/workspace/158a25cb-3731-4394-aea3-73211e112302 HTTP/1.1" 200 OK
+INFO:     106.101.194.223:52182 - "GET /api/v1/surveys/workspace/158a25cb-3731-4394-aea3-73211e112302 HTTP/1.1" 200 OK
+INFO:     106.101.194.223:52192 - "OPTIONS /api/v1/surveys/f9b7be74-593b-4683-8bbc-e9e3bc0669c8 HTTP/1.1" 200 OK
+INFO:     106.101.194.223:52192 - "GET /api/v1/surveys/f9b7be74-593b-4683-8bbc-e9e3bc0669c8 HTTP/1.1" 200 OK
+WARNING:  WatchFiles detected changes in 'utils/auth.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [126054]
+INFO:     Started server process [130567]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     176.65.148.236:52468 - "GET / HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [130567]
