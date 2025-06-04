@@ -42,4 +42,7 @@ class Workspace(WorkspaceBase):
 class StandardResponse(BaseModel):
     success: bool
     message: str
-    data: dict = {} 
+    data: dict = {}
+
+class WorkspaceVisibilityUpdate(BaseModel):
+    is_visible: bool 

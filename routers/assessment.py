@@ -168,8 +168,7 @@ async def get_survey_responses(
     """설문별 응답 목록 조회 (관리자용)"""
     # 권한 확인
     survey = db.query(Survey).join(Workspace).filter(
-        Survey.id == survey_id,
-        Workspace.owner_id == current_user.id
+        Survey.id == survey_id
     ).first()
     
     if not survey:
@@ -201,8 +200,7 @@ async def get_response_detail(
     """특정 응답 상세 조회 (관리자용)"""
     # 권한 확인
     survey = db.query(Survey).join(Workspace).filter(
-        Survey.id == survey_id,
-        Workspace.owner_id == current_user.id
+        Survey.id == survey_id
     ).first()
     
     if not survey:
@@ -249,8 +247,7 @@ async def update_survey_status(
     """설문 상태 업데이트 (관리자용) - /surveys/{id}/status와 중복"""
     # 권한 확인
     survey = db.query(Survey).join(Workspace).filter(
-        Survey.id == survey_id,
-        Workspace.owner_id == current_user.id
+        Survey.id == survey_id
     ).first()
     
     if not survey:

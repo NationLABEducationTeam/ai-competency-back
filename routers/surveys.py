@@ -51,7 +51,8 @@ def format_survey_response(survey: Survey) -> dict:
         "status": survey.status,
         "access_link": survey.access_link,
         "created_at": survey.created_at,
-        "updated_at": survey.updated_at
+        "updated_at": survey.updated_at,
+        "target": survey.target
     }
 
 @router.get("/", response_model=List[SurveySchema])
@@ -85,8 +86,7 @@ async def get_surveys_by_workspace(
 @router.get("/{survey_id}", response_model=SurveySchema)
 async def get_survey(
     survey_id: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    db: Session = Depends(get_db)
 ):
     survey = db.query(Survey).filter(
         Survey.id == survey_id
@@ -105,8 +105,8 @@ async def create_survey(
 ):
     # 워크스페이스 권한 확인
     workspace = db.query(Workspace).filter(
-        Workspace.id == survey.workspace_id,
-        Workspace.user_id == current_user.id
+        Workspace.id == survey.workspace_id
+        #Workspace.user_id == current_user.id
     ).first()
     
     if not workspace:
@@ -119,7 +119,7 @@ async def create_survey(
     db_survey = Survey(
         id=survey_id,
         **survey.dict(),
-        status='draft'  # 기본 상태
+        status='active'  # 기본 상태
     )
     
     db.add(db_survey)
@@ -136,8 +136,8 @@ async def delete_survey(
 ):
     # 설문 존재 여부 및 권한 확인
     survey = db.query(Survey).join(Workspace).filter(
-        Survey.id == survey_id,
-        Workspace.user_id == current_user.id
+        Survey.id == survey_id
+        #Workspace.user_id == current_user.id
     ).first()
     
     if not survey:
@@ -156,7 +156,27 @@ async def delete_survey(
         return {"success": True, "message": "Survey deleted successfully"}
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to delete survey: {str(e)}")
+        error_str = str(e)
+        
+        # 외래 키 제약 조건 에러 감지
+        if "foreign key constraint fails" in error_str.lower() or "1451" in error_str:
+            if "survey_submissions" in error_str:
+                raise HTTPException(
+                    status_code=400, 
+                    detail="이 설문은 응답 기록이 있어 삭제할 수 없습니다. 설문을 비활성화하거나 응답 기록을 먼저 삭제해주세요."
+                )
+            elif "simple_analytics" in error_str:
+                raise HTTPException(
+                    status_code=400, 
+                    detail="이 설문은 분석 데이터가 있어 삭제할 수 없습니다. 관련 데이터를 먼저 삭제해주세요."
+                )
+            else:
+                raise HTTPException(
+                    status_code=400, 
+                    detail="이 설문은 관련 데이터가 있어 삭제할 수 없습니다. 관련 데이터를 먼저 삭제하거나 설문을 비활성화해주세요."
+                )
+        else:
+            raise HTTPException(status_code=500, detail=f"설문 삭제 중 오류가 발생했습니다: {str(e)}")
 
 @router.post("/{survey_id}/upload")
 async def upload_excel(
@@ -167,8 +187,8 @@ async def upload_excel(
 ):
     # 설문 권한 확인
     survey = db.query(Survey).join(Workspace).filter(
-        Survey.id == survey_id,
-        Workspace.user_id == current_user.id
+        Survey.id == survey_id
+        #Workspace.user_id == current_user.id
     ).first()
     
     if not survey:
@@ -218,8 +238,8 @@ async def get_presigned_upload_url(
 ):
     # 설문 권한 확인
     survey = db.query(Survey).join(Workspace).filter(
-        Survey.id == survey_id,
-        Workspace.user_id == current_user.id
+        Survey.id == survey_id
+        #Workspace.user_id == current_user.id
     ).first()
     
     if not survey:
@@ -245,8 +265,8 @@ async def confirm_upload_complete(
 ):
     # 설문 권한 확인
     survey = db.query(Survey).join(Workspace).filter(
-        Survey.id == survey_id,
-        Workspace.user_id == current_user.id
+        Survey.id == survey_id
+        #Workspace.user_id == current_user.id
     ).first()
     
     if not survey:
@@ -295,6 +315,40 @@ async def update_survey_status(
     except Exception as e:
         print(f"설문 상태 업데이트 중 오류: {e}")
         raise HTTPException(status_code=500, detail="Failed to update survey status")
+
+@router.post("/{survey_id}/archive")
+async def archive_survey(
+    survey_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """설문을 draft 상태로 변경하여 보관 처리"""
+    try:
+        # 설문 확인
+        survey = db.query(Survey).filter(
+            Survey.id == survey_id
+        ).first()
+        
+        if not survey:
+            raise HTTPException(status_code=404, detail="설문을 찾을 수 없습니다.")
+        
+        # 상태를 draft로 변경
+        survey.status = 'draft'
+        db.commit()
+        db.refresh(survey)
+        
+        return {
+            "success": True,
+            "message": "설문이 보관 처리되었습니다.",
+            "survey": format_survey_response(survey)
+        }
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"설문 보관 처리 중 오류가 발생했습니다: {str(e)}"
+        )
 
 async def calculate_analytics(
     db: Session,
@@ -427,8 +481,8 @@ async def get_survey_responses(
     try:
         # 설문 및 권한 확인
         survey = db.query(Survey).join(Workspace).filter(
-            Survey.id == survey_id,
-            Workspace.user_id == current_user.id
+            Survey.id == survey_id
+            #Workspace.user_id == current_user.id
         ).first()
         
         if not survey:

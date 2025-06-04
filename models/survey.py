@@ -14,6 +14,7 @@ class Survey(Base):
     scale_min = Column(Integer, default=1)
     scale_max = Column(Integer, default=5)
     max_questions = Column(Integer, default=100)
+    target = Column(Integer, nullable=False, default=10)  # 목표 응답자 수
     status = Column(Enum('draft', 'active', 'inactive'), default='draft')
     access_link = Column(String(255))
     created_at = Column(DateTime, server_default=func.now())

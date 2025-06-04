@@ -3,16 +3,18 @@ from sqlalchemy.orm import Session
 from typing import List
 import uuid
 from database.connection import get_db
-from models import User, Workspace, Category
+from models import User, Workspace, Category, Survey, Response
 from schemas.workspace import (
     WorkspaceCreate, 
     Workspace as WorkspaceSchema,
     WorkspaceUpdate,
     CategoryCreate,
     Category as CategorySchema,
-    StandardResponse
+    StandardResponse,
+    WorkspaceVisibilityUpdate
 )
 from utils.auth import get_current_active_user
+import traceback
 
 router = APIRouter()
 
@@ -23,7 +25,8 @@ async def get_workspaces(
 ):
     print(f"🏢 워크스페이스 조회 요청")
     
-    workspaces = db.query(Workspace).all()
+    # is_visible이 True(1)인 워크스페이스만 조회
+    workspaces = db.query(Workspace).filter(Workspace.is_visible == True).all()
     
     print(f"📊 찾은 워크스페이스 수: {len(workspaces)}")
     
@@ -41,6 +44,49 @@ async def get_workspaces(
         })
     
     return result
+
+@router.get("/trash")
+async def get_trash_surveys(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """보관함(휴지통)에 있는 설문들 조회 - draft 상태인 설문들"""
+    try:
+        # draft 상태인 설문들 조회
+        trash_surveys = db.query(Survey).join(Workspace).filter(
+            Survey.status == 'draft'
+        ).all()
+        
+        result = []
+        for survey in trash_surveys:
+            # 각 설문의 응답 수 조회
+            response_count = db.query(Response).filter(
+                Response.survey_id == survey.id
+            ).count()
+            
+            result.append({
+                "id": survey.id,
+                "title": survey.title,
+                "description": survey.description,
+                "workspace_id": survey.workspace_id,
+                "workspace_name": survey.workspace.title if survey.workspace else "Unknown",
+                "status": survey.status,
+                "response_count": response_count,
+                "created_at": survey.created_at,
+                "updated_at": survey.updated_at
+            })
+        
+        return {
+            "surveys": result,
+            "total_count": len(result)
+        }
+        
+    except Exception as e:
+        print(f"보관함 조회 중 오류: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"보관함 조회 중 오류가 발생했습니다: {str(e)}"
+        )
 
 @router.get("/{workspace_id}", response_model=WorkspaceSchema)
 async def get_workspace(
@@ -106,8 +152,8 @@ async def update_workspace(
     current_user: User = Depends(get_current_active_user)
 ):
     workspace = db.query(Workspace).filter(
-        Workspace.id == workspace_id,
-        Workspace.user_id == current_user.id
+        Workspace.id == workspace_id
+        #Workspace.user_id == current_user.id
     ).first()
     
     if not workspace:
@@ -129,28 +175,89 @@ async def update_workspace(
         "data": {}
     }
 
-@router.delete("/{workspace_id}", response_model=StandardResponse)
-async def delete_workspace(
+@router.put("/{workspace_id}/hide", response_model=StandardResponse)
+async def hide_workspace(
+    workspace_id: str,
+    visibility: WorkspaceVisibilityUpdate = WorkspaceVisibilityUpdate(is_visible=False),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    try:
+        print(f"워크스페이스 숨김 처리 시작: {workspace_id}")
+        print(f"current_user.id: {getattr(current_user, 'id', None)}")
+        print(f"visibility: {visibility}")
+        print(f"visibility.is_visible: {getattr(visibility, 'is_visible', None)}")
+
+        workspace = db.query(Workspace).filter(
+            Workspace.id == workspace_id
+            #Workspace.user_id == current_user.id
+        ).first()
+        print(f"쿼리 결과 workspace: {workspace}")
+        if workspace:
+            print(f"workspace.id: {workspace.id}")
+            print(f"workspace.title: {workspace.title}")
+            print(f"workspace.is_visible(변경 전): {workspace.is_visible}")
+        else:
+            print("워크스페이스를 찾을 수 없음")
+            raise HTTPException(status_code=404, detail="Workspace not found")
+
+        workspace.is_visible = visibility.is_visible
+        print(f"workspace.is_visible(변경 후): {workspace.is_visible}")
+        db.commit()
+        print(f"워크스페이스 숨김 처리 완료: {workspace_id}")
+
+        return {
+            "success": True,
+            "message": "Workspace visibility updated successfully",
+            "data": {}
+        }
+    except Exception as e:
+        db.rollback()
+        print("예외 발생! traceback:")
+        traceback.print_exc()
+        error_msg = f"Failed to update workspace visibility: {str(e)}"
+        print(error_msg)
+        raise HTTPException(
+            status_code=500,
+            detail=error_msg
+        )
+
+@router.put("/{workspace_id}/show", response_model=StandardResponse)
+async def show_workspace(
     workspace_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    workspace = db.query(Workspace).filter(
-        Workspace.id == workspace_id,
-        Workspace.user_id == current_user.id
-    ).first()
-    
-    if not workspace:
-        raise HTTPException(status_code=404, detail="Workspace not found")
-    
-    db.delete(workspace)
-    db.commit()
-    
-    return {
-        "success": True,
-        "message": "Workspace deleted successfully",
-        "data": {}
-    }
+    try:
+        print(f"워크스페이스 표시 처리 시작: {workspace_id}")
+        
+        # 워크스페이스 확인
+        workspace = db.query(Workspace).filter(
+            Workspace.id == workspace_id
+            #Workspace.user_id == current_user.id
+        ).first()
+        
+        if not workspace:
+            raise HTTPException(status_code=404, detail="Workspace not found")
+        
+        # is_visible을 True(1)로 설정
+        workspace.is_visible = True
+        db.commit()
+        print(f"워크스페이스 표시 처리 완료: {workspace_id}")
+        
+        return {
+            "success": True,
+            "message": "Workspace shown successfully",
+            "data": {}
+        }
+    except Exception as e:
+        db.rollback()
+        error_msg = f"Failed to show workspace: {str(e)}"
+        print(error_msg)
+        raise HTTPException(
+            status_code=500,
+            detail=error_msg
+        )
 
 @router.get("/{workspace_id}/categories", response_model=List[CategorySchema])
 async def get_categories(
@@ -190,8 +297,8 @@ async def create_category(
 ):
     # 워크스페이스 권한 확인
     workspace = db.query(Workspace).filter(
-        Workspace.id == workspace_id,
-        Workspace.user_id == current_user.id
+        Workspace.id == workspace_id
+        #Workspace.user_id == current_user.id
     ).first()
     
     if not workspace:

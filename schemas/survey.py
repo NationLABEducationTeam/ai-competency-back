@@ -24,6 +24,7 @@ class SurveyBase(BaseModel):
     scale_min: Optional[int] = 1
     scale_max: Optional[int] = 5
     max_questions: Optional[int] = 100
+    target: Optional[int] = 10
 
 class SurveyCreate(SurveyBase):
     workspace_id: str
@@ -35,6 +36,7 @@ class SurveyUpdate(BaseModel):
     scale_min: Optional[int] = None
     scale_max: Optional[int] = None
     max_questions: Optional[int] = None
+    target: Optional[int] = None
     access_link: Optional[str] = None
 
 class Survey(SurveyBase):
@@ -44,6 +46,7 @@ class Survey(SurveyBase):
     access_link: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
+    target: int
     
     class Config:
         from_attributes = True

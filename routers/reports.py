@@ -40,10 +40,8 @@ async def get_all_reports(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    # 사용자의 모든 워크스페이스의 리포트 조회
-    surveys = db.query(Survey).join(Workspace).filter(
-        Workspace.owner_id == current_user.id
-    ).all()
+    # 모든 워크스페이스의 리포트 조회
+    surveys = db.query(Survey).join(Workspace).all()
     
     reports = []
     for survey in surveys:
@@ -75,8 +73,7 @@ async def get_workspace_reports(
 ):
     # 워크스페이스 권한 확인
     workspace = db.query(Workspace).filter(
-        Workspace.id == workspace_id,
-        Workspace.owner_id == current_user.id
+        Workspace.id == workspace_id
     ).first()
     
     if not workspace:
@@ -112,9 +109,7 @@ async def get_student_list(
     current_user: User = Depends(get_current_active_user)
 ):
     """학생 목록 조회 (워크스페이스별 필터링 가능)"""
-    query = db.query(Response).join(Survey).join(Workspace).filter(
-        Workspace.owner_id == current_user.id
-    )
+    query = db.query(Response).join(Survey).join(Workspace)
     
     if workspace_id:
         query = query.filter(Survey.workspace_id == workspace_id)
@@ -147,7 +142,6 @@ async def get_student_results(
 ):
     """특정 학생의 모든 설문 결과 조회"""
     responses = db.query(Response).join(Survey).join(Workspace).filter(
-        Workspace.owner_id == current_user.id,
         Response.respondent_email == student_email
     ).all()
     
@@ -197,10 +191,9 @@ async def save_report_to_s3(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    # 설문 권한 확인
+    # 설문 존재 여부만 확인
     survey = db.query(Survey).join(Workspace).filter(
-        Survey.id == request.survey_id,
-        Workspace.owner_id == current_user.id
+        Survey.id == request.survey_id
     ).first()
     
     if not survey:

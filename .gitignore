@@ -72,3 +72,15 @@ coverage.xml
 .mypy_cache/
 .dmypy.json
 dmypy.json 
+
+#testing python files
+test/
+test/*
+
+
+#nohup files
+nohup.out
+nohup.out.*
+nohup.out.*.*
+nohup.out.*.*.*
+nohup.out.*.*.*.*
