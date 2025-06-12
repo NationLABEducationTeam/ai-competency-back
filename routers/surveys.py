@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
+from pydantic import BaseModel
 import boto3
 import uuid
 import os
@@ -26,14 +27,13 @@ from schemas.survey import (
 from utils.auth import get_current_active_user
 import pandas as pd
 from statistics import mean, quantiles
+from survey_submissions import SurveySubmissionManager
 
 router = APIRouter()
 
 # S3 클라이언트 설정
 s3_client = boto3.client(
     's3',
-    aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
-    aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY'),
     region_name=os.getenv('AWS_REGION', 'ap-northeast-2')
 )
 BUCKET_NAME = os.getenv('S3_BUCKET_NAME', 'survey-uploads')
@@ -519,4 +519,315 @@ async def get_survey_responses(
         raise HTTPException(
             status_code=500,
             detail="Failed to fetch survey responses"
+        )
+
+# ===== 설문 제출 로그 관련 엔드포인트 =====
+
+class SubmissionLogCreate(BaseModel):
+    respondent_name: str
+    respondent_email: str
+
+class SubmissionLogUpdate(BaseModel):
+    completion_status: str  # 'completed', 'abandoned'
+    completion_time: Optional[int] = None  # 완료 소요 시간(초)
+
+class SubmissionLog(BaseModel):
+    id: str
+    workspace_id: str
+    survey_id: str
+    respondent_name: str
+    respondent_email: str
+    submission_date: datetime
+    completion_status: str
+    completion_time: Optional[int]
+
+@router.post("/{survey_id}/submissions/start")
+async def start_survey_submission(
+    survey_id: str,
+    submission_data: SubmissionLogCreate,
+    db: Session = Depends(get_db)
+):
+    """설문 시작 로그 생성"""
+    try:
+        # 설문 존재 여부 확인
+        survey = db.query(Survey).filter(Survey.id == survey_id).first()
+        if not survey:
+            raise HTTPException(status_code=404, detail="Survey not found")
+        
+        if survey.status != 'active':
+            raise HTTPException(
+                status_code=400,
+                detail="This survey is not currently active"
+            )
+
+        # 제출 로그 생성
+        manager = SurveySubmissionManager()
+        submission_id = manager.create_submission(
+            workspace_id=survey.workspace_id,
+            survey_id=survey_id,
+            respondent_email=submission_data.respondent_email,
+            respondent_name=submission_data.respondent_name
+        )
+
+        if not submission_id:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to create submission log"
+            )
+
+        return {
+            "submission_id": submission_id,
+            "survey_id": survey_id,
+            "workspace_id": survey.workspace_id,
+            "message": "Survey submission started successfully"
+        }
+
+    except Exception as e:
+        print(f"설문 시작 로그 생성 중 오류: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to start survey submission"
+        )
+
+@router.put("/{survey_id}/submissions/{submission_id}/complete")
+async def complete_survey_submission(
+    survey_id: str,
+    submission_id: str,
+    completion_data: SubmissionLogUpdate,
+    db: Session = Depends(get_db)
+):
+    """설문 완료 로그 업데이트"""
+    try:
+        # 설문 존재 여부 확인
+        survey = db.query(Survey).filter(Survey.id == survey_id).first()
+        if not survey:
+            raise HTTPException(status_code=404, detail="Survey not found")
+
+        # 제출 로그 업데이트
+        manager = SurveySubmissionManager()
+        success = manager.update_submission_status(
+            submission_id=submission_id,
+            status=completion_data.completion_status,
+            completion_time=completion_data.completion_time
+        )
+
+        if not success:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to update submission status"
+            )
+
+        return {
+            "submission_id": submission_id,
+            "survey_id": survey_id,
+            "status": completion_data.completion_status,
+            "completion_time": completion_data.completion_time,
+            "message": f"Survey submission marked as {completion_data.completion_status}"
+        }
+
+    except Exception as e:
+        print(f"설문 완료 로그 업데이트 중 오류: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to complete survey submission"
+        )
+
+@router.get("/{survey_id}/submissions")
+async def get_survey_submissions(
+    survey_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """특정 설문의 제출 로그 조회"""
+    try:
+        # 설문 및 권한 확인
+        survey = db.query(Survey).join(Workspace).filter(
+            Survey.id == survey_id
+        ).first()
+        
+        if not survey:
+            raise HTTPException(status_code=404, detail="Survey not found")
+
+        # 제출 로그 조회
+        manager = SurveySubmissionManager()
+        
+        # 설문별 제출 기록 조회 (survey_submissions 테이블에서)
+        submissions_sql = """
+        SELECT * FROM survey_submissions 
+        WHERE survey_id = %s 
+        ORDER BY submission_date DESC
+        """
+        
+        submissions = []
+        try:
+            with manager.connection.cursor() as cursor:
+                cursor.execute(submissions_sql, (survey_id,))
+                results = cursor.fetchall()
+                
+                for row in results:
+                    submissions.append({
+                        "id": row['id'],
+                        "workspace_id": row['workspace_id'],
+                        "survey_id": row['survey_id'],
+                        "respondent_name": row['respondent_name'],
+                        "respondent_email": row['respondent_email'],
+                        "submission_date": row['submission_date'],
+                        "completion_status": row['completion_status'],
+                        "completion_time": row['completion_time']
+                    })
+        except Exception as e:
+            print(f"제출 로그 조회 실패: {e}")
+            return {"submissions": [], "total_count": 0}
+
+        return {
+            "survey_id": survey_id,
+            "survey_title": survey.title,
+            "submissions": submissions,
+            "total_count": len(submissions),
+            "completed_count": len([s for s in submissions if s['completion_status'] == 'completed']),
+            "started_count": len([s for s in submissions if s['completion_status'] == 'started']),
+            "abandoned_count": len([s for s in submissions if s['completion_status'] == 'abandoned'])
+        }
+
+    except Exception as e:
+        print(f"설문 제출 로그 조회 중 오류: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to fetch survey submissions"
+        )
+
+@router.get("/workspace/{workspace_id}/submissions")
+async def get_workspace_submissions(
+    workspace_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """워크스페이스의 모든 설문 제출 로그 조회"""
+    try:
+        # 워크스페이스 권한 확인
+        workspace = db.query(Workspace).filter(
+            Workspace.id == workspace_id
+        ).first()
+        
+        if not workspace:
+            raise HTTPException(status_code=404, detail="Workspace not found")
+
+        # 제출 로그 조회
+        manager = SurveySubmissionManager()
+        
+        # 워크스페이스별 제출 기록 조회
+        submissions_sql = """
+        SELECT ss.*, s.title as survey_title 
+        FROM survey_submissions ss
+        JOIN surveys s ON ss.survey_id = s.id
+        WHERE ss.workspace_id = %s 
+        ORDER BY ss.submission_date DESC
+        """
+        
+        submissions = []
+        try:
+            with manager.connection.cursor() as cursor:
+                cursor.execute(submissions_sql, (workspace_id,))
+                results = cursor.fetchall()
+                
+                for row in results:
+                    submissions.append({
+                        "id": row['id'],
+                        "workspace_id": row['workspace_id'],
+                        "survey_id": row['survey_id'],
+                        "survey_title": row['survey_title'],
+                        "respondent_name": row['respondent_name'],
+                        "respondent_email": row['respondent_email'],
+                        "submission_date": row['submission_date'],
+                        "completion_status": row['completion_status'],
+                        "completion_time": row['completion_time']
+                    })
+        except Exception as e:
+            print(f"워크스페이스 제출 로그 조회 실패: {e}")
+            return {"submissions": [], "total_count": 0}
+
+        return {
+            "workspace_id": workspace_id,
+            "workspace_title": workspace.title,
+            "submissions": submissions,
+            "total_count": len(submissions),
+            "completed_count": len([s for s in submissions if s['completion_status'] == 'completed']),
+            "started_count": len([s for s in submissions if s['completion_status'] == 'started']),
+            "abandoned_count": len([s for s in submissions if s['completion_status'] == 'abandoned'])
+        }
+
+    except Exception as e:
+        print(f"워크스페이스 제출 로그 조회 중 오류: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to fetch workspace submissions"
+        )
+
+@router.get("/submissions/student/{student_email}")
+async def get_student_submissions(
+    student_email: str,
+    workspace_id: Optional[str] = Query(None, description="워크스페이스로 필터링"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """특정 학생의 설문 제출 로그 조회"""
+    try:
+        # 제출 로그 조회
+        manager = SurveySubmissionManager()
+        
+        # 학생별 제출 기록 조회
+        base_sql = """
+        SELECT ss.*, s.title as survey_title, w.title as workspace_title
+        FROM survey_submissions ss
+        JOIN surveys s ON ss.survey_id = s.id
+        JOIN workspace w ON ss.workspace_id = w.id
+        WHERE ss.respondent_email = %s
+        """
+        
+        params = [student_email]
+        if workspace_id:
+            base_sql += " AND ss.workspace_id = %s"
+            params.append(workspace_id)
+        
+        base_sql += " ORDER BY ss.submission_date DESC"
+        
+        submissions = []
+        try:
+            with manager.connection.cursor() as cursor:
+                cursor.execute(base_sql, params)
+                results = cursor.fetchall()
+                
+                for row in results:
+                    submissions.append({
+                        "id": row['id'],
+                        "workspace_id": row['workspace_id'],
+                        "workspace_title": row['workspace_title'],
+                        "survey_id": row['survey_id'],
+                        "survey_title": row['survey_title'],
+                        "respondent_name": row['respondent_name'],
+                        "respondent_email": row['respondent_email'],
+                        "submission_date": row['submission_date'],
+                        "completion_status": row['completion_status'],
+                        "completion_time": row['completion_time']
+                    })
+        except Exception as e:
+            print(f"학생 제출 로그 조회 실패: {e}")
+            return {"submissions": [], "total_count": 0}
+
+        return {
+            "student_email": student_email,
+            "student_name": submissions[0]['respondent_name'] if submissions else None,
+            "workspace_filter": workspace_id,
+            "submissions": submissions,
+            "total_count": len(submissions),
+            "completed_count": len([s for s in submissions if s['completion_status'] == 'completed']),
+            "started_count": len([s for s in submissions if s['completion_status'] == 'started']),
+            "abandoned_count": len([s for s in submissions if s['completion_status'] == 'abandoned'])
+        }
+
+    except Exception as e:
+        print(f"학생 제출 로그 조회 중 오류: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to fetch student submissions"
         ) 

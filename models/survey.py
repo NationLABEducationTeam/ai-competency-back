@@ -1,8 +1,23 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Boolean, JSON, Enum, Float
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Boolean, JSON, Enum, Float, Table, MetaData
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
-from database.connection import Base
+from database.connection import Base, engine
 from .category import Category  # Category 모델 import
+
+# survey_submissions 테이블 정의
+metadata_obj = MetaData()
+survey_submissions = Table(
+    'survey_submissions',
+    metadata_obj,
+    Column('id', String(36), primary_key=True),
+    Column('workspace_id', String(36), ForeignKey('workspace.id'), nullable=False),
+    Column('survey_id', String(36), ForeignKey('surveys.id'), nullable=False),
+    Column('respondent_email', String(100), nullable=False),
+    Column('respondent_name', String(100), nullable=False),
+    Column('submission_date', DateTime, server_default=func.now(), index=True),
+    Column('completion_status', Enum('started', 'completed', 'abandoned', name='completion_status_enum'), server_default='started'),
+    Column('completion_time', Integer)
+)
 
 class Survey(Base):
     __tablename__ = "surveys"
@@ -111,4 +126,19 @@ class SimpleAnalytics(Base):
     percentage = Column(Float, nullable=False)
     created_at = Column(DateTime, server_default=func.now())
 
-    survey = relationship("Survey", back_populates="simple_analytics") 
+    survey = relationship("Survey", back_populates="simple_analytics")
+
+class SurveySubmission(Base):
+    __tablename__ = "survey_submissions"
+    
+    id = Column(String(36), primary_key=True, index=True)
+    workspace_id = Column(String(36), ForeignKey("workspace.id"), nullable=False)
+    survey_id = Column(String(36), ForeignKey("surveys.id"), nullable=False)
+    respondent_email = Column(String(100), nullable=False)
+    respondent_name = Column(String(100), nullable=False)
+    submission_date = Column(DateTime, server_default=func.now(), index=True)
+    completion_status = Column(Enum('started', 'completed', 'abandoned'), default='started')
+    completion_time = Column(Integer)
+
+    survey = relationship("Survey", backref="submissions")
+    workspace = relationship("Workspace", backref="submissions") 

@@ -15,269 +15,275 @@ router = APIRouter()
 # S3 클라이언트 설정
 s3_client = boto3.client(
     's3',
-    aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
-    aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY'),
     region_name=os.getenv('AWS_REGION', 'ap-northeast-2')
 )
-BUCKET_NAME = os.getenv('S3_BUCKET_NAME', 'survey-reports')
+BUCKET_NAME = os.getenv('S3_BUCKET_NAME', 'competency-surveys')
 
-class Report(BaseModel):
-    id: int
-    title: str
-    workspace_id: int
-    workspace_name: str
-    survey_id: str
-    survey_title: str
-    created_at: datetime
-    report_url: Optional[str] = None
+class StudentResult(BaseModel):
+    student_name: str
+    file_key: str
+    size: int
+    last_modified: datetime
+    download_url: str
+    result_type: str  # "original" or "ai"
 
-class SaveReportRequest(BaseModel):
-    survey_id: str
-    report_data: dict
+class SurveyResults(BaseModel):
+    survey_name: str
+    total_students: int
+    original_results: List[StudentResult]
+    ai_results: List[StudentResult]
 
-@router.get("/", response_model=List[Report])
-async def get_all_reports(
-    db: Session = Depends(get_db),
+@router.get("/workspaces")
+async def get_report_workspaces(
     current_user: User = Depends(get_current_active_user)
 ):
-    # 모든 워크스페이스의 리포트 조회
-    surveys = db.query(Survey).join(Workspace).all()
-    
-    reports = []
-    for survey in surveys:
-        # 완료된 응답이 있는 설문만 리포트 생성
-        completed_count = db.query(Response).filter(
-            Response.survey_id == survey.id,
-            Response.completed == True
-        ).count()
-        
-        if completed_count > 0:
-            reports.append({
-                "id": survey.id,
-                "title": f"{survey.title} 리포트",
-                "workspace_id": survey.workspace_id,
-                "workspace_name": survey.workspace.name,
-                "survey_id": survey.id,
-                "survey_title": survey.title,
-                "created_at": survey.created_at,
-                "report_url": survey.excel_file_url  # 기존 파일 URL 사용
-            })
-    
-    return reports
-
-@router.get("/workspace/{workspace_id}", response_model=List[Report])
-async def get_workspace_reports(
-    workspace_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    # 워크스페이스 권한 확인
-    workspace = db.query(Workspace).filter(
-        Workspace.id == workspace_id
-    ).first()
-    
-    if not workspace:
-        raise HTTPException(status_code=404, detail="Workspace not found")
-    
-    surveys = db.query(Survey).filter(Survey.workspace_id == workspace_id).all()
-    
-    reports = []
-    for survey in surveys:
-        completed_count = db.query(Response).filter(
-            Response.survey_id == survey.id,
-            Response.completed == True
-        ).count()
-        
-        if completed_count > 0:
-            reports.append({
-                "id": survey.id,
-                "title": f"{survey.title} 리포트",
-                "workspace_id": survey.workspace_id,
-                "workspace_name": workspace.name,
-                "survey_id": survey.id,
-                "survey_title": survey.title,
-                "created_at": survey.created_at,
-                "report_url": survey.excel_file_url  # 기존 파일 URL 사용
-            })
-    
-    return reports
-
-@router.get("/students")
-async def get_student_list(
-    workspace_id: Optional[int] = Query(None),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    """학생 목록 조회 (워크스페이스별 필터링 가능)"""
-    query = db.query(Response).join(Survey).join(Workspace)
-    
-    if workspace_id:
-        query = query.filter(Survey.workspace_id == workspace_id)
-    
-    # 이메일로 그룹화하여 학생 목록 생성
-    students_dict = {}
-    responses = query.all()
-    
-    for response in responses:
-        email = response.respondent_email
-        if email not in students_dict:
-            students_dict[email] = {
-                "email": email,
-                "name": response.respondent_name,
-                "response_count": 0,
-                "last_response_date": response.created_at
-            }
-        students_dict[email]["response_count"] += 1
-        if response.created_at > students_dict[email]["last_response_date"]:
-            students_dict[email]["last_response_date"] = response.created_at
-    
-    student_list = list(students_dict.values())
-    return f"Found {len(student_list)} students with {len(responses)} total responses"
-
-@router.get("/students/{student_email}/results")
-async def get_student_results(
-    student_email: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    """특정 학생의 모든 설문 결과 조회"""
-    responses = db.query(Response).join(Survey).join(Workspace).filter(
-        Response.respondent_email == student_email
-    ).all()
-    
-    if not responses:
-        raise HTTPException(status_code=404, detail="Student not found")
-    
-    results = []
-    total_avg_score = 0
-    completed_surveys = 0
-    
-    for response in responses:
-        # 답변 정보 조회
-        answers = db.query(Answer).filter(Answer.response_id == response.id).all()
-        
-        # 점수 계산
-        total_score = 0
-        score_count = 0
-        for answer in answers:
-            if answer.answer_value is not None:
-                total_score += answer.answer_value
-                score_count += 1
-        
-        avg_score = total_score / score_count if score_count > 0 else 0
-        
-        if response.completed:
-            total_avg_score += avg_score
-            completed_surveys += 1
-        
-        results.append({
-            "response_id": response.id,
-            "survey_id": response.survey_id,
-            "survey_title": response.survey.title,
-            "workspace_name": response.survey.workspace.name,
-            "completed": response.completed,
-            "created_at": response.created_at,
-            "average_score": round(avg_score, 2),
-            "total_questions": len(answers)
-        })
-    
-    overall_avg = total_avg_score / completed_surveys if completed_surveys > 0 else 0
-    
-    return f"Student {student_email} ({responses[0].respondent_name if responses else 'Unknown'}): {len(responses)} responses, {completed_surveys} completed, Overall Average: {overall_avg:.2f}"
-
-@router.post("/save-to-s3")
-async def save_report_to_s3(
-    request: SaveReportRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    # 설문 존재 여부만 확인
-    survey = db.query(Survey).join(Workspace).filter(
-        Survey.id == request.survey_id
-    ).first()
-    
-    if not survey:
-        raise HTTPException(status_code=404, detail="Survey not found")
-    
-    # 리포트 데이터 생성
-    report_data = generate_report_data(survey, db)
-    
-    # S3에 저장
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    file_key = f"reports/{survey.workspace_id}/{survey.id}/report_{timestamp}.json"
-    
+    """리포트가 있는 워크스페이스 목록 조회"""
     try:
-        s3_client.put_object(
+        response = s3_client.list_objects_v2(
             Bucket=BUCKET_NAME,
-            Key=file_key,
-            Body=json.dumps(report_data, ensure_ascii=False),
-            ContentType='application/json'
+            Prefix='reports/',
+            Delimiter='/'
         )
         
-        report_url = f"https://{BUCKET_NAME}.s3.amazonaws.com/{file_key}"
+        workspaces = []
+        if 'CommonPrefixes' in response:
+            for prefix in response['CommonPrefixes']:
+                workspace_name = prefix['Prefix'].replace('reports/', '').rstrip('/')
+                workspaces.append(workspace_name)
         
-        return f"Report saved successfully to S3: {report_url}"
+        return {
+            "workspaces": workspaces,
+            "total_count": len(workspaces)
+        }
+        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch workspaces: {str(e)}"
+        )
 
-def generate_report_data(survey: Survey, db: Session) -> dict:
-    """설문 리포트 데이터 생성"""
-    
-    # 응답 통계
-    total_responses = db.query(Response).filter(
-        Response.survey_id == survey.id
-    ).count()
-    
-    completed_responses = db.query(Response).filter(
-        Response.survey_id == survey.id,
-        Response.completed == True
-    ).count()
-    
-    # 질문별 응답 분석
-    questions = db.query(Question).filter(
-        Question.survey_id == survey.id
-    ).order_by(Question.order).all()
-    
-    question_analysis = []
-    for question in questions:
-        answers = db.query(Answer).filter(
-            Answer.question_id == question.id
-        ).all()
+@router.get("/workspaces/{workspace_name}/surveys")
+async def get_workspace_surveys(
+    workspace_name: str,
+    current_user: User = Depends(get_current_active_user)
+):
+    """워크스페이스의 설문별 리포트 목록 조회"""
+    try:
+        prefix = f"reports/{workspace_name}/"
         
-        # 점수형 질문의 경우 평균 계산
-        if question.question_type == "rating":
-            scores = [a.answer_value for a in answers if a.answer_value is not None]
-            avg_score = sum(scores) / len(scores) if scores else 0
-            
-            question_analysis.append({
-                "question_id": question.id,
-                "question_text": question.question_text,
-                "question_type": question.question_type,
-                "response_count": len(answers),
-                "average_score": round(avg_score, 2)
-            })
+        response = s3_client.list_objects_v2(
+            Bucket=BUCKET_NAME,
+            Prefix=prefix,
+            Delimiter='/'
+        )
+        
+        surveys = []
+        if 'CommonPrefixes' in response:
+            for prefix_obj in response['CommonPrefixes']:
+                survey_name = prefix_obj['Prefix'].replace(prefix, '').rstrip('/')
+                
+                # 설문별 학생 수 조회 (AI 폴더 기준)
+                ai_prefix = f"{prefix_obj['Prefix']}AI/"
+                ai_response = s3_client.list_objects_v2(
+                    Bucket=BUCKET_NAME,
+                    Prefix=ai_prefix
+                )
+                ai_student_count = ai_response.get('KeyCount', 0)
+                
+                # 일반 결과 파일 수 조회
+                survey_response = s3_client.list_objects_v2(
+                    Bucket=BUCKET_NAME,
+                    Prefix=prefix_obj['Prefix']
+                )
+                # AI 폴더 제외한 직접 파일만 계산
+                original_count = 0
+                if 'Contents' in survey_response:
+                    for obj in survey_response['Contents']:
+                        relative_path = obj['Key'].replace(prefix_obj['Prefix'], '')
+                        if '/' not in relative_path and relative_path.endswith('.json'):
+                            original_count += 1
+                
+                surveys.append({
+                    "survey_name": survey_name,
+                    "original_results_count": original_count,
+                    "ai_results_count": ai_student_count,
+                    "total_students": max(original_count, ai_student_count)
+                })
+        
+        return {
+            "workspace_name": workspace_name,
+            "surveys": surveys,
+            "total_surveys": len(surveys)
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch surveys: {str(e)}"
+        )
+
+@router.get("/workspaces/{workspace_name}/surveys/{survey_name}")
+async def get_survey_results(
+    workspace_name: str,
+    survey_name: str,
+    current_user: User = Depends(get_current_active_user)
+):
+    """특정 설문의 학생별 결과 파일들 조회 (일반 + AI)"""
+    try:
+        base_prefix = f"reports/{workspace_name}/{survey_name}/"
+        ai_prefix = f"{base_prefix}AI/"
+        
+        # AI 결과 파일들 조회
+        ai_response = s3_client.list_objects_v2(
+            Bucket=BUCKET_NAME,
+            Prefix=ai_prefix
+        )
+        
+        ai_results = []
+        if 'Contents' in ai_response:
+            for obj in ai_response['Contents']:
+                if obj['Key'] != ai_prefix and obj['Key'].endswith('.json'):
+                    student_name = obj['Key'].replace(ai_prefix, '').replace('.json', '')
+                    download_url = f"https://{BUCKET_NAME}.s3.amazonaws.com/{obj['Key']}"
+                    
+                    ai_results.append({
+                        "student_name": student_name,
+                        "file_key": obj['Key'],
+                        "size": obj['Size'],
+                        "last_modified": obj['LastModified'],
+                        "download_url": download_url,
+                        "result_type": "ai"
+                    })
+        
+        # 일반 결과 파일들 조회
+        original_response = s3_client.list_objects_v2(
+            Bucket=BUCKET_NAME,
+            Prefix=base_prefix,
+            Delimiter='/'
+        )
+        
+        original_results = []
+        if 'Contents' in original_response:
+            for obj in original_response['Contents']:
+                if obj['Key'] != base_prefix and obj['Key'].endswith('.json'):
+                    relative_path = obj['Key'].replace(base_prefix, '')
+                    # AI 폴더가 아닌 직접 파일만
+                    if '/' not in relative_path:
+                        student_name = relative_path.replace('.json', '')
+                        download_url = f"https://{BUCKET_NAME}.s3.amazonaws.com/{obj['Key']}"
+                        
+                        original_results.append({
+                            "student_name": student_name,
+                            "file_key": obj['Key'],
+                            "size": obj['Size'],
+                            "last_modified": obj['LastModified'],
+                            "download_url": download_url,
+                            "result_type": "original"
+                        })
+        
+        # 학생 이름별로 정렬
+        ai_results.sort(key=lambda x: x['student_name'])
+        original_results.sort(key=lambda x: x['student_name'])
+        
+        return {
+            "workspace_name": workspace_name,
+            "survey_name": survey_name,
+            "total_students": len(set([r['student_name'] for r in ai_results + original_results])),
+            "ai_results": ai_results,
+            "original_results": original_results,
+            "ai_results_count": len(ai_results),
+            "original_results_count": len(original_results)
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch survey results: {str(e)}"
+        )
+
+@router.get("/workspaces/{workspace_name}/surveys/{survey_name}/ai")
+async def get_ai_results_only(
+    workspace_name: str,
+    survey_name: str,
+    current_user: User = Depends(get_current_active_user)
+):
+    """AI 분석 결과만 조회 (프론트엔드에서 주로 사용)"""
+    try:
+        ai_prefix = f"reports/{workspace_name}/{survey_name}/AI/"
+        
+        response = s3_client.list_objects_v2(
+            Bucket=BUCKET_NAME,
+            Prefix=ai_prefix
+        )
+        
+        ai_results = []
+        if 'Contents' in response:
+            for obj in response['Contents']:
+                if obj['Key'] != ai_prefix and obj['Key'].endswith('.json'):
+                    student_name = obj['Key'].replace(ai_prefix, '').replace('.json', '')
+                    download_url = f"https://{BUCKET_NAME}.s3.amazonaws.com/{obj['Key']}"
+                    
+                    ai_results.append({
+                        "student_name": student_name,
+                        "file_key": obj['Key'],
+                        "size": obj['Size'],
+                        "last_modified": obj['LastModified'],
+                        "download_url": download_url
+                    })
+        
+        # 학생 이름별로 정렬
+        ai_results.sort(key=lambda x: x['student_name'])
+        
+        return {
+            "workspace_name": workspace_name,
+            "survey_name": survey_name,
+            "ai_results": ai_results,
+            "total_count": len(ai_results)
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch AI results: {str(e)}"
+        )
+
+@router.get("/workspaces/{workspace_name}/surveys/{survey_name}/students/{student_name}")
+async def get_student_result(
+    workspace_name: str,
+    survey_name: str,
+    student_name: str,
+    result_type: str = Query("ai", description="결과 타입: 'ai' 또는 'original'"),
+    current_user: User = Depends(get_current_active_user)
+):
+    """특정 학생의 결과 파일 직접 조회"""
+    try:
+        if result_type == "ai":
+            file_key = f"reports/{workspace_name}/{survey_name}/AI/{student_name}.json"
         else:
-            # 텍스트형 응답은 샘플만 포함
-            sample_answers = [a.answer_text for a in answers[:5] if a.answer_text]
+            file_key = f"reports/{workspace_name}/{survey_name}/{student_name}.json"
+        
+        # 파일 존재 확인
+        try:
+            response = s3_client.head_object(Bucket=BUCKET_NAME, Key=file_key)
+            download_url = f"https://{BUCKET_NAME}.s3.amazonaws.com/{file_key}"
             
-            question_analysis.append({
-                "question_id": question.id,
-                "question_text": question.question_text,
-                "question_type": question.question_type,
-                "response_count": len(answers),
-                "sample_answers": sample_answers
-            })
-    
-    return {
-        "survey_id": survey.id,
-        "survey_title": survey.title,
-        "workspace_id": survey.workspace_id,
-        "workspace_name": survey.workspace.name,
-        "generated_at": datetime.now().isoformat(),
-        "statistics": {
-            "total_responses": total_responses,
-            "completed_responses": completed_responses,
-            "completion_rate": round((completed_responses / total_responses * 100) if total_responses > 0 else 0, 2)
-        },
-        "question_analysis": question_analysis
-    } 
+            return {
+                "student_name": student_name,
+                "file_key": file_key,
+                "size": response['ContentLength'],
+                "last_modified": response['LastModified'],
+                "download_url": download_url,
+                "result_type": result_type
+            }
+            
+        except s3_client.exceptions.NoSuchKey:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Result file not found for student '{student_name}' (type: {result_type})"
+            )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch student result: {str(e)}"
+        ) 

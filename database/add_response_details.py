@@ -56,7 +56,7 @@ def add_response_details():
             charset='utf8mb4',
             cursorclass=pymysql.cursors.DictCursor
         )
-        print("✅ MySQL 연결 성공!")
+        # print("✅ MySQL 연결 성공!")
         
         with connection.cursor() as cursor:
             # competency 데이터베이스 선택

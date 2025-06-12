@@ -36,7 +36,7 @@ def connect_to_mysql():
             charset='utf8mb4',
             cursorclass=pymysql.cursors.DictCursor
         )
-        print("✅ MySQL 연결 성공!")
+        # print("✅ MySQL 연결 성공!")
         return connection
     except Exception as e:
         print(f"❌ MySQL 연결 실패: {e}")
