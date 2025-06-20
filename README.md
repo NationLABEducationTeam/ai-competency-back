@@ -61,6 +61,8 @@ nohup uvicorn main:app --host 0.0.0.0 --port 8080 > uvicorn.log 2>&1 &
 uvicorn main:app --host 0.0.0.0 --port 8081 --reload
 ```
 
+새로운 기능을 추가하고 production 서버로 배포를 하고 싶다면?
+
 ## API 문서
 
 서버 실행 후 다음 URL에서 API 문서를 확인할 수 있습니다:
