@@ -38,13 +38,8 @@ AWS_REGION=ap-northeast-2
 S3_BUCKET_NAME=survey-uploads
 ```
 
-### 3. 데이터베이스 테이블 생성
 
-```bash
-python create_tables.py
-```
-
-### 4. 서버 실행
+### 3. 서버 실행
 
 해당 디렉토리로 먼저 이동 후
 
@@ -70,8 +65,16 @@ uvicorn main:app --host 0.0.0.0 --port 8081 --reload
 
 서버 실행 후 다음 URL에서 API 문서를 확인할 수 있습니다:
 
-- Swagger UI: http://localhost:8080/docs
-- ReDoc: http://localhost:8080/redoc
+production 서버
+
+- Swagger UI: http://3.35.230.242:8080/docs
+- ReDoc: http://3.35.230.242:8080/redoc
+
+test 서버 (포트 번호 다르게 해서)
+
+- Swagger UI: http://3.35.230.242:8081/docs
+- ReDoc: http://3.35.230.242:8081/redoc
+
 
 ## 프로젝트 구조
 
