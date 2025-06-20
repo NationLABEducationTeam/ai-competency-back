@@ -36,7 +36,7 @@ s3_client = boto3.client(
     's3',
     region_name=os.getenv('AWS_REGION', 'ap-northeast-2')
 )
-BUCKET_NAME = os.getenv('S3_BUCKET_NAME', 'survey-uploads')
+BUCKET_NAME = os.getenv('S3_BUCKET_NAME', 'competency-surveys')
 
 def format_survey_response(survey: Survey) -> dict:
     """설문 응답을 OpenAPI 형식으로 변환"""
