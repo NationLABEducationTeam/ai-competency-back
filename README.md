@@ -46,14 +46,24 @@ python create_tables.py
 
 ### 4. 서버 실행
 
+해당 디렉토리로 먼저 이동 후
+
 ```bash
-python main.py
+cd survey-back
+```
+
+production 서버 실행하는 방법
+
+```bash
+nohup uvicorn main:app --host 0.0.0.0 --port 8080 > uvicorn.log 2>&1 &
 ```
 
 또는
 
+테스트 서버, 즉 기능 업데이트 한 것을 배포하기 전에 테스트 하고 싶을 때 (포트를 다르게 하시면 됩니다)
+
 ```bash
-uvicorn main:app --host 0.0.0.0 --port 8080 --reload
+uvicorn main:app --host 0.0.0.0 --port 8081 --reload
 ```
 
 ## API 문서
