@@ -24,7 +24,7 @@ FastAPI 기반의 설문조사 백엔드 API 서버입니다.
 
 이 프로젝트는 AWS 클라우드 환경 (서울 리전, ap-northeast-2) 에서 운영됩니다.
 
--   **Application Server**: AWS EC2 인스턴스(이름 : survey22-dont-delete (id : i-04a562052fcb0700b )| `3.35.230.242`)에서 FastAPI 애플리케이션이 실행됩니다.
+-   **Application Server**: AWS EC2 인스턴스(이름 : **survey22-dont-delete** (id : **i-04a562052fcb0700b** )| **`3.35.230.242`**)에서 FastAPI 애플리케이션이 실행됩니다.
 -   **Database**: AWS RDS for MySQL을 사용하여 데이터를 안정적으로 저장하고 관리합니다.
 -   **File Storage**: 생성된 리포트 및 파일들은 AWS S3 버킷에 저장됩니다.
 
